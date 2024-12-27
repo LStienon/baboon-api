@@ -1,7 +1,19 @@
-import { Elysia } from "elysia";
+import {Elysia} from "elysia";
+import { swagger } from "@elysiajs/swagger";
+import {baseRouter} from "./routers/base_router";
+import {baboonRouter} from "./routers/baboon_router";
+import {customizedLogger} from "./middlewares/customized_logger";
 
-const app = new Elysia().get("/", () => "Hello Elysia").listen(3000);
+const app = new Elysia()
+    .use(swagger())
+    .use(customizedLogger)
+    .use(baseRouter)
+    .use(baboonRouter)
+    .listen(process.env.PORT ?? 3000);
 
 console.log(
-  `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`
+  `🐒 Baboon API is running at ${app.server?.hostname}:${app.server?.port}`
 );
+
+
+
