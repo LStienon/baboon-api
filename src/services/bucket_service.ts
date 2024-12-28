@@ -1,24 +1,123 @@
-import { S3Client, ListObjectsCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  ListObjectsV2Command,
+  HeadBucketCommand,
+  PutObjectCommand,
+  DeleteObjectsCommand
+} from "@aws-sdk/client-s3"
 
 const s3 = new S3Client({
-  endpoint: process.env.BUCKET_ENDPOINT, // Ton endpoint personnalisé
-  region: "fra1", // Région arbitraire
+  endpoint: process.env.BUCKET_ENDPOINT,
+  region: "fra1",
   credentials: {
-    accessKeyId: process.env.BUCKET_KEY!, // Utilise l'Access Key ID
-    secretAccessKey: process.env.BUCKET_SECRET!, // Utilise la Secret Access Key
+    accessKeyId: process.env.BUCKET_KEY!,
+    secretAccessKey: process.env.BUCKET_SECRET!,
   },
-  forcePathStyle: false,
-});
+  forcePathStyle: true,
+})
 
-export const getRandomImageUrl = async () => {
-  const bucketFolder = process.env.BUCKET_FOLDER!;
-  const command = new ListObjectsCommand({
-    Bucket: bucketFolder, // Ton dossier est traité comme un "Bucket" logique
-  });
+export const BucketService = {
 
-  const { Contents } = await s3.send(command);
-  if (!Contents || Contents.length === 0) return null;
+  /**
+   * Returns a string with the url of a random image from the given bucket folder
+   * @param bucketFolder
+   */
+  getRandomImageUrl: async (bucketFolder: string): Promise<string | null> => {
+    const bucketName = process.env.BUCKET_NAME!
 
-  const randomFile = Contents[Math.floor(Math.random() * Contents.length)];
-  return `${process.env.BUCKET_ENDPOINT}/${randomFile.Key}`;
-};
+    const command = new ListObjectsV2Command({
+      Bucket: bucketName,
+      Prefix: `${bucketFolder}/`,
+    })
+
+    try {
+      const { Contents } = await s3.send(command)
+      console.log(Contents)
+
+      if (!Contents || Contents.length === 0) {
+        console.log("No file found")
+        return null
+      }
+
+      const imageFiles = Contents.filter(item => item.Key?.endsWith('.webp'))
+
+      if (imageFiles.length === 0) {
+        console.log("No file found")
+        return null
+      }
+
+      const randomFile = imageFiles[Math.floor(Math.random() * imageFiles.length)]
+      return `${process.env.BUCKET_CDN_ENDPOINT}/${randomFile.Key}`
+    }
+    catch (e) {
+      console.error("Something went wrong while fetching a random image from the bucket:", e)
+      return null
+    }
+  },
+
+  uploadFile: async (bucketName: string, key: string, body: Buffer, contentType: string): Promise<string> => {
+    try {
+      await s3.send(
+          new PutObjectCommand({
+            Bucket: bucketName,
+            Key: key,
+            Body: body,
+            ContentType: contentType,
+            ACL: 'public-read',
+          })
+      )
+      console.log(`File uploaded to S3: ${key}`)
+      return `${process.env.BUCKET_CDN_ENDPOINT}/${key}`
+    } catch (err) {
+      console.error('Error uploading file to S3:', err)
+      throw new Error('Failed to upload file to S3')
+    }
+  },
+
+  cleanSizedFolder: async () => {
+    const prefix = `${process.env.BUCKET_FOLDER}/sized/`
+    const bucketName = process.env.BUCKET_NAME!
+
+    try {
+      const listCommand = new ListObjectsV2Command({
+        Bucket: bucketName,
+        Prefix: prefix
+      })
+      const response = await s3.send(listCommand)
+
+      if (response.Contents && response.Contents.length > 0) {
+        const deleteCommand = new DeleteObjectsCommand({
+          Bucket: bucketName,
+          Delete: {
+            Objects: response.Contents.map(item => ({ Key: item.Key! })),
+          },
+        })
+
+        await s3.send(deleteCommand)
+        console.log('SIZED folder cleaned')
+      }
+    } catch (err) {
+      console.error('Error cleaning SIZED folder:', err)
+    }
+  },
+
+  /**
+   * Just for testing the bucket's connection and credentials
+   */
+  testConnection: async () => {
+    const bucketName = process.env.BUCKET_NAME!
+
+    const command = new HeadBucketCommand({
+      Bucket: bucketName,
+    })
+
+    try {
+      await s3.send(command)
+      console.log("Connection successfully established !")
+    }
+    catch (error) {
+      console.error("Something went wrong while trying to establish the connection :", error)
+    }
+  }
+
+}
