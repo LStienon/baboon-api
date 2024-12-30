@@ -1,50 +1,81 @@
-import {Elysia} from "elysia"
+import {Elysia, t} from "elysia"
 import {BucketService} from "../services/bucket_service"
 import sharp from 'sharp'
+import {OpenaiService} from "../services/openai_service";
+import axios from 'axios'
+
+const localBucketFilesLifespan = parseInt(process.env.IMAGE_RETENTION_LIFESPAN ?? '10_000')
 
 export const baboonRouter = new Elysia()
-  .get('/baboon/random', async () => {
+    .group('/baboon', (app) =>
+        app
+            .group('/random', (app) =>
+                app
+                    .get('/', async () => {
+                      const imageUrl = await BucketService.getRandomImageUrl(process.env.BUCKET_FOLDER ?? "")
+                      if (!imageUrl) return {error: "No images found"}
 
-    const imageUrl = await BucketService.getRandomImageUrl(process.env.BUCKET_FOLDER ?? "")
-    if (!imageUrl) return { error: "No images found" }
+                      return {url: imageUrl}
+                    })
+                    .get('/:width/:height', async ({params}) => {
+                      const {width, height} = params
 
-    return { url: imageUrl }
-  })
-  .get('/baboon/random/:width/:height', async ({ params }) => {
-    const { width, height } = params
+                      const imageUrl = await BucketService.getRandomImageUrl(process.env.BUCKET_FOLDER ?? "")
+                      if (!imageUrl) return {error: "No images found"}
 
-    const w = parseInt(width, 10)
-    const h = parseInt(height, 10)
+                      const response = await fetch(imageUrl)
+                      if (!response.ok) {
+                        throw new Error(`Failed to fetch image: ${response.statusText}`)
+                      }
 
-    if (isNaN(w) || isNaN(h)) {
-      return { error: "Invalid width or height parameters" }
-    }
+                      const arrayBuffer = await response.arrayBuffer()
+                      const imageBuffer = Buffer.from(arrayBuffer)
 
-    const imageUrl = await BucketService.getRandomImageUrl(process.env.BUCKET_FOLDER ?? "")
-    if (!imageUrl) return { error: "No images found" }
+                      const resizedImageBuffer = await sharp(imageBuffer)
+                          .resize(width, height)
+                          .toBuffer()
 
-    const response = await fetch(imageUrl)
-    if (!response.ok) {
-      throw new Error(`Failed to fetch image: ${response.statusText}`)
-    }
+                      const resizedImageKey = `${process.env.BUCKET_FOLDER}/sized/${width}x${height}-${Date.now()}.webp`
 
-    const arrayBuffer = await response.arrayBuffer()
-    const imageBuffer = Buffer.from(arrayBuffer)
+                      const resizedImageUrl = await BucketService.uploadFile(
+                          process.env.BUCKET_NAME!,
+                          resizedImageKey,
+                          resizedImageBuffer,
+                          'image/webp'
+                      )
 
-    const resizedImageBuffer = await sharp(imageBuffer)
-        .resize(w, h)
-        .toBuffer()
+                      setTimeout(() => BucketService.cleanSizedFolder(), localBucketFilesLifespan)
 
-    const resizedImageKey = `${process.env.BUCKET_FOLDER}/sized/${w}x${h}-${Date.now()}.webp`
+                      return {url: resizedImageUrl}
+                    }, {
+                      params: t.Object({
+                        width: t.Number(),
+                        height: t.Number()
+                      })
+                    })
+            )
+            .group('/ai', (app) =>
+                app.get('/', async () => {
 
-    const resizedImageUrl = await BucketService.uploadFile(
-        process.env.BUCKET_NAME!,
-        resizedImageKey,
-        resizedImageBuffer,
-        'image/webp'
+                  const imageUrl = await OpenaiService.generateBaboonImage()
+
+                  const generatedImage = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+
+                  const generatedImageKey = `${process.env.BUCKET_FOLDER}/generated/ai-baboon-${Date.now()}.webp`
+                  const bucketUrl = await BucketService.uploadFile(
+                      process.env.BUCKET_NAME!,
+                      generatedImageKey,
+                      Buffer.from(generatedImage.data),
+                      generatedImage.headers['content-type']
+                  );
+
+                  console.log('imageUrl = ' + imageUrl)
+                  console.log('bucketUrl = ' + bucketUrl)
+
+                  setTimeout(() => BucketService.cleanSizedFolder(), localBucketFilesLifespan)
+
+                  return {url: bucketUrl}
+                })
+            )
     )
 
-    setTimeout(() => BucketService.cleanSizedFolder(), 10000)
-
-    return { url: resizedImageUrl }
-  })

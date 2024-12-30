@@ -55,7 +55,20 @@ export const BucketService = {
     }
   },
 
-  uploadFile: async (bucketName: string, key: string, body: Buffer, contentType: string): Promise<string> => {
+  /**
+   * Upload a file or any content to the specified bucket.
+   * @param bucketName Name of the bucket
+   * @param key Path or file name for the content
+   * @param body Content to upload (Buffer or binary data)
+   * @param contentType MIME type of the content
+   * @returns URL of the uploaded file
+   */
+  uploadFile: async (
+      bucketName: string,
+      key: string,
+      body: Buffer | string, // Prend en charge Buffer ou texte brut
+      contentType: string
+  ): Promise<string> => {
     try {
       await s3.send(
           new PutObjectCommand({
@@ -65,12 +78,12 @@ export const BucketService = {
             ContentType: contentType,
             ACL: 'public-read',
           })
-      )
-      console.log(`File uploaded to S3: ${key}`)
-      return `${process.env.BUCKET_CDN_ENDPOINT}/${key}`
+      );
+      console.log(`File uploaded to bucket: ${bucketName}, key: ${key}`);
+      return `${process.env.BUCKET_CDN_ENDPOINT}/${key}`;
     } catch (err) {
-      console.error('Error uploading file to S3:', err)
-      throw new Error('Failed to upload file to S3')
+      console.error('Error uploading file to bucket:', err);
+      throw new Error('Failed to upload file to the bucket');
     }
   },
 
