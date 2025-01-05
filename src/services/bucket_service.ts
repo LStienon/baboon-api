@@ -5,6 +5,7 @@ import {
   PutObjectCommand,
   DeleteObjectsCommand
 } from "@aws-sdk/client-s3"
+import {FailedUploadException, NoImagesFoundException} from "../constants/custom_exceptions"
 
 const s3 = new S3Client({
   endpoint: process.env.BUCKET_ENDPOINT,
@@ -19,40 +20,37 @@ const s3 = new S3Client({
 export const BucketService = {
 
   /**
-   * Returns a string with the url of a random image from the given bucket folder
-   * @param bucketFolder
+   * Returns a string with the URL of a random image from the given bucket folder
+   * @param bucketFolder The folder in the bucket to search for images
+   * @returns URL of a random image or null if no image is found
    */
-  getRandomImageUrl: async (bucketFolder: string): Promise<string | null> => {
+  getRandomImageUrl: async (bucketFolder: string): Promise<string> => {
     const bucketName = process.env.BUCKET_NAME!
 
     const command = new ListObjectsV2Command({
       Bucket: bucketName,
       Prefix: `${bucketFolder}/`,
+      Delimiter: '/'
     })
 
-    try {
-      const { Contents } = await s3.send(command)
-      console.log(Contents)
+    const { Contents } = await s3.send(command)
 
-      if (!Contents || Contents.length === 0) {
-        console.log("No file found")
-        return null
-      }
-
-      const imageFiles = Contents.filter(item => item.Key?.endsWith('.webp'))
-
-      if (imageFiles.length === 0) {
-        console.log("No file found")
-        return null
-      }
-
-      const randomFile = imageFiles[Math.floor(Math.random() * imageFiles.length)]
-      return `${process.env.BUCKET_CDN_ENDPOINT}/${randomFile.Key}`
+    if (!Contents || Contents.length === 0) {
+      console.log("No file found")
+      throw new NoImagesFoundException()
     }
-    catch (e) {
-      console.error("Something went wrong while fetching a random image from the bucket:", e)
-      return null
+
+    const imageFiles = Contents.filter(item =>
+        item.Key?.match(/\.(webp|png|jpeg)$/i)
+    )
+
+    if (imageFiles.length === 0) {
+      console.log("No file found")
+      throw new NoImagesFoundException()
     }
+
+    const randomFile = imageFiles[Math.floor(Math.random() * imageFiles.length)]
+    return `${process.env.BUCKET_CDN_ENDPOINT}/${randomFile.Key}`
   },
 
   /**
@@ -66,7 +64,7 @@ export const BucketService = {
   uploadFile: async (
       bucketName: string,
       key: string,
-      body: Buffer | string, // Prend en charge Buffer ou texte brut
+      body: Buffer | string,
       contentType: string
   ): Promise<string> => {
     try {
@@ -78,17 +76,22 @@ export const BucketService = {
             ContentType: contentType,
             ACL: 'public-read',
           })
-      );
-      console.log(`File uploaded to bucket: ${bucketName}, key: ${key}`);
-      return `${process.env.BUCKET_CDN_ENDPOINT}/${key}`;
-    } catch (err) {
-      console.error('Error uploading file to bucket:', err);
-      throw new Error('Failed to upload file to the bucket');
+      )
+      console.log(`File uploaded to bucket: ${bucketName}, key: ${key}`)
+      return `${process.env.BUCKET_CDN_ENDPOINT}/${key}`
+    }
+    catch (err) {
+      console.error('Error uploading file to bucket:', err)
+      throw new FailedUploadException()
     }
   },
 
-  cleanSizedFolder: async () => {
-    const prefix = `${process.env.BUCKET_FOLDER}/sized/`
+  /**
+   * Deletes all objects within the specified folder in the S3 bucket.
+   * @param folderName Name of the folder to clean
+   */
+  cleanFolder: async (folderName: string) => {
+    const prefix = `${process.env.BUCKET_FOLDER}/${folderName}/`
     const bucketName = process.env.BUCKET_NAME!
 
     try {
@@ -107,10 +110,11 @@ export const BucketService = {
         })
 
         await s3.send(deleteCommand)
-        console.log('SIZED folder cleaned')
+        console.log(`${folderName} folder cleaned`)
       }
-    } catch (err) {
-      console.error('Error cleaning SIZED folder:', err)
+    }
+    catch (err) {
+      console.error(`Error cleaning ${folderName} folder:`, err)
     }
   },
 

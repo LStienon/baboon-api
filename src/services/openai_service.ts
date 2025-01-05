@@ -1,5 +1,5 @@
-import OpenAI from "openai";
-import {ImageGenerationFailedException} from "../constants/custom_exceptions";
+import OpenAI from "openai"
+import {ImageGenerationFailedException} from "../constants/custom_exceptions"
 
 export const OpenaiService = {
 
@@ -14,14 +14,14 @@ export const OpenaiService = {
       const openai = new OpenAI({
         apiKey: process.env.OPENAI_API_KEY,
         project: process.env.OPENAI_PROJECT_ID
-      });
+      })
 
       const response = await openai.images.generate({
         model: "dall-e-3",
         prompt: "A photo realistic image of an ugly baboon",
         n: 1,
         size: "1024x1024",
-      });
+      })
 
       result = response.data[0].url
     }
