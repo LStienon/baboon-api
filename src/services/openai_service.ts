@@ -1,5 +1,6 @@
 import OpenAI from "openai"
 import {ImageGenerationFailedException} from "../constants/custom_exceptions"
+import {LoggingService} from "./logging_service";
 
 export const OpenaiService = {
 
@@ -26,6 +27,12 @@ export const OpenaiService = {
       result = response.data[0].url
     }
     catch (e) {
+      if (e instanceof Error) {
+        LoggingService.error("The Open AI request to generate a baboon image failed, here are the details", { details: e.stack })
+      }
+      else {
+        LoggingService.error("The Open AI request to generate a baboon image failed, but the we couldn't retrieve much info about it ...", { error: e })
+      }
       throw new ImageGenerationFailedException()
     }
 

@@ -2,19 +2,22 @@
   "name": "baboon-api",
   "version": "1.0.50",
   "scripts": {
-    "dev": "bun run --watch src/index.ts"
+    "dev": "bun run --watch src/index.ts",
+    "build": "bun build --compile --minify-whitespace --minify-syntax --target bun --outfile dist/server.js src/index.ts",
+    "preview": "bun run dist/server.js"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.717.0",
+    "@aws-sdk/client-s3": "^3.726.1",
     "@bogeychan/elysia-logger": "^0.1.7",
     "@elysiajs/cors": "^1.2.0",
     "@elysiajs/swagger": "^1.2.0",
     "axios": "^1.7.9",
     "dotenv": "^16.4.7",
     "elysia": "latest",
-    "openai": "^4.77.0",
+    "openai": "^4.78.1",
     "pino-pretty": "^13.0.0",
-    "sharp": "^0.33.5"
+    "sharp": "^0.33.5",
+    "winston": "^3.17.0"
   },
   "devDependencies": {
     "bun-types": "latest"

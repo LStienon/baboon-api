@@ -6,6 +6,7 @@ import {
   DeleteObjectsCommand
 } from "@aws-sdk/client-s3"
 import {FailedUploadException, NoImagesFoundException} from "../constants/custom_exceptions"
+import {LoggingService} from "./logging_service";
 
 const s3 = new S3Client({
   endpoint: process.env.BUCKET_ENDPOINT,
@@ -36,7 +37,7 @@ export const BucketService = {
     const { Contents } = await s3.send(command)
 
     if (!Contents || Contents.length === 0) {
-      console.log("No file found")
+      LoggingService.warn('No images found on the DO bucket', { command: command })
       throw new NoImagesFoundException()
     }
 
@@ -45,7 +46,7 @@ export const BucketService = {
     )
 
     if (imageFiles.length === 0) {
-      console.log("No file found")
+      LoggingService.warn('Images were found on the DO bucket, but none were valid', { fetchedContent: Contents })
       throw new NoImagesFoundException()
     }
 
@@ -67,23 +68,18 @@ export const BucketService = {
       body: Buffer | string,
       contentType: string
   ): Promise<string> => {
-    try {
-      await s3.send(
-          new PutObjectCommand({
-            Bucket: bucketName,
-            Key: key,
-            Body: body,
-            ContentType: contentType,
-            ACL: 'public-read',
-          })
-      )
-      console.log(`File uploaded to bucket: ${bucketName}, key: ${key}`)
-      return `${process.env.BUCKET_CDN_ENDPOINT}/${key}`
-    }
-    catch (err) {
-      console.error('Error uploading file to bucket:', err)
-      throw new FailedUploadException()
-    }
+    await s3.send(
+        new PutObjectCommand({
+          Bucket: bucketName,
+          Key: key,
+          Body: body,
+          ContentType: contentType,
+          ACL: 'public-read',
+        })
+    )
+    const newUrl = `${process.env.BUCKET_CDN_ENDPOINT}/${key}`
+    LoggingService.info('Just uploaded a new image to the DO bucket', { url: newUrl })
+    return newUrl
   },
 
   /**
@@ -94,27 +90,25 @@ export const BucketService = {
     const prefix = `${process.env.BUCKET_FOLDER}/${folderName}/`
     const bucketName = process.env.BUCKET_NAME!
 
-    try {
-      const listCommand = new ListObjectsV2Command({
+    const listCommand = new ListObjectsV2Command({
+      Bucket: bucketName,
+      Prefix: prefix
+    })
+    const response = await s3.send(listCommand)
+
+    if (response.Contents && response.Contents.length > 0) {
+      const deleteCommand = new DeleteObjectsCommand({
         Bucket: bucketName,
-        Prefix: prefix
+        Delete: {
+          Objects: response.Contents.map(item => ({ Key: item.Key! })),
+        },
       })
-      const response = await s3.send(listCommand)
 
-      if (response.Contents && response.Contents.length > 0) {
-        const deleteCommand = new DeleteObjectsCommand({
-          Bucket: bucketName,
-          Delete: {
-            Objects: response.Contents.map(item => ({ Key: item.Key! })),
-          },
-        })
-
-        await s3.send(deleteCommand)
-        console.log(`${folderName} folder cleaned`)
-      }
+      await s3.send(deleteCommand)
+      LoggingService.info(`Just cleaned the ${folderName} folder, nice !`)
     }
-    catch (err) {
-      console.error(`Error cleaning ${folderName} folder:`, err)
+    else {
+      LoggingService.warn(`Couldn't clean the ${folderName} folder, either it didn't exist, was empty, or the command to check that failed`, { response: response })
     }
   },
 
@@ -130,9 +124,13 @@ export const BucketService = {
 
     try {
       await s3.send(command)
-      console.log("Connection successfully established !")
+      const connSuccess = "Connection successfully established !"
+      LoggingService.info(connSuccess)
+      console.log(connSuccess)
     }
     catch (error) {
+      const connError = "Something went wrong while trying to establish the connection ..."
+      LoggingService.error(connError, { error: error })
       console.error("Something went wrong while trying to establish the connection :", error)
     }
   }

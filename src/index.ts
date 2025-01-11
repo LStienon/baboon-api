@@ -5,10 +5,18 @@ import {baboonRouter} from "./routers/baboon_router";
 import {customizedLogger} from "./middlewares/customized_logger";
 import { cors } from '@elysiajs/cors'
 import {BucketService} from "./services/bucket_service";
+import {version} from '../package.json'
 
 const app = new Elysia()
     .use(customizedLogger)
-    .use(swagger())
+    .use(swagger({
+      documentation: {
+        info: {
+          version: version,
+          title: 'Baboon API'
+        }
+      }
+    }))
     .use(baseRouter)
     .use(baboonRouter)
     .use(cors())

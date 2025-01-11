@@ -1,7 +1,8 @@
 import {ImageFetchFailedException} from "../constants/custom_exceptions"
 import sharp from "sharp"
-import {SizedImageArgs} from "./baboon_service"
+import {SizedImageParams} from "./baboon_service"
 import axios from "axios"
+import {LoggingService} from "./logging_service";
 
 interface FetchedBufferResponse {
   buffer: Buffer
@@ -23,9 +24,10 @@ export const ImagesService = {
    *  - `contentType`: The MIME type of the fetched image.
    * @throws {ImageFetchFailedException} If the HTTP request fails or the status code is not 200.
    */
-  fetchAndGetBuffer: async (dlUrl: string, sizedArgs?: SizedImageArgs): Promise<FetchedBufferResponse> => {
+  fetchAndGetBuffer: async (dlUrl: string, sizedArgs?: SizedImageParams): Promise<FetchedBufferResponse> => {
     const response = await axios.get(dlUrl, { responseType: 'arraybuffer' })
     if (response.status !== 200) {
+      LoggingService.error("The ImagesService wanted to fetch an image but couldn't do so for some reason", { url: dlUrl })
       throw new ImageFetchFailedException(response.statusText)
     }
 
