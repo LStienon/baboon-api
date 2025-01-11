@@ -25,7 +25,7 @@ const logger: Logger = createLogger({
   ),
   transports: [
     new transports.File({ filename: path.join(logDir, logFileName) }),
-    new transports.Console(),
+    // new transports.Console(),
   ],
 })
 
