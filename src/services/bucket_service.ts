@@ -5,8 +5,8 @@ import {
   PutObjectCommand,
   DeleteObjectsCommand
 } from "@aws-sdk/client-s3"
-import {FailedUploadException, NoImagesFoundException} from "../constants/custom_exceptions"
-import {LoggingService} from "./logging_service";
+import {NoImagesFoundException} from "../constants/custom_exceptions"
+import {LoggingService} from "./logging_service"
 
 const s3 = new S3Client({
   endpoint: process.env.BUCKET_ENDPOINT,
