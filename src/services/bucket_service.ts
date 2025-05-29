@@ -3,10 +3,11 @@ import {
   ListObjectsV2Command,
   HeadBucketCommand,
   PutObjectCommand,
-  DeleteObjectsCommand
+  DeleteObjectsCommand, GetObjectCommand
 } from "@aws-sdk/client-s3"
 import {NoImagesFoundException} from "../constants/custom_exceptions"
 import {LoggingService} from "./logging_service"
+import {getSignedUrl} from "@aws-sdk/s3-request-presigner"
 
 const s3 = new S3Client({
   endpoint: process.env.BUCKET_ENDPOINT,
@@ -19,6 +20,23 @@ const s3 = new S3Client({
 })
 
 export const BucketService = {
+
+  /**
+   * Generates a signed URL for accessing a specific object in the bucket.
+   * Useful for securely serving files without exposing them publicly.
+   * @param key The full key (path) of the object in the bucket
+   * @returns A signed URL as a string, valid for 1 hour
+   */
+  getSignedUrlForKey: async (key: string): Promise<string> => {
+    const bucketName = process.env.BUCKET_NAME!
+
+    const command = new GetObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+    })
+
+    return await getSignedUrl(s3, command, { expiresIn: 3600 })
+  },
 
   /**
    * Returns a string with the URL of a random image from the given bucket folder
@@ -51,7 +69,8 @@ export const BucketService = {
     }
 
     const randomFile = imageFiles[Math.floor(Math.random() * imageFiles.length)]
-    return `${process.env.BUCKET_CDN_ENDPOINT}/${randomFile.Key}`
+    
+    return await BucketService.getSignedUrlForKey(randomFile.Key!)
   },
 
   /**

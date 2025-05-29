@@ -1,11 +1,11 @@
 import {BucketService} from "./bucket_service"
 import {ImagesService} from "./images_service"
 import {OpenaiService} from "./openai_service"
-import {
-  BaboonApiException, ImageFetchFailedException, NoImagesFoundException,
-} from "../constants/custom_exceptions"
+import {BaboonApiException} from "../constants/custom_exceptions"
 import {ErrHandler} from "../routers/baboon_router"
 import {LoggingService} from "./logging_service";
+import {GetObjectCommand} from "@aws-sdk/client-s3";
+import {getSignedUrl} from "@aws-sdk/s3-request-presigner";
 
 export interface SizedImageParams {
   width: number
@@ -50,6 +50,8 @@ export const BaboonService = {
    *         - 500: Internal server error.
    */
   getRandomBaboonImage: async (context: ErrHandler, sizedArgs?: SizedImageParams) => {
+    const bucketName = process.env.BUCKET_NAME!
+
     try {
 
       LoggingService.info('Step 1 : choosing a random baboon image from the bucket')
@@ -77,7 +79,9 @@ export const BaboonService = {
 
       setTimeout(() => BucketService.cleanFolder('sized'), localBucketFilesLifespan)
 
-      return {url: resizedImageUrl}
+      return {
+        url: await BucketService.getSignedUrlForKey(resizedImageKey)
+      }
     }
     catch (e) {
       const formattedErr = getErrorResponse(e)
@@ -144,7 +148,9 @@ export const BaboonService = {
 
       setTimeout(() => BucketService.cleanFolder('generated'), localBucketFilesLifespan)
 
-      return {url: bucketUrl}
+      return {
+        url: await BucketService.getSignedUrlForKey(generatedImageKey)
+      }
     }
     catch (e) {
       const formattedErr = getErrorResponse(e)
